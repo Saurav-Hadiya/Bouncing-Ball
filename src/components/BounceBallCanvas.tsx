@@ -148,41 +148,6 @@ function renderBouncingBall(
 const BounceBallCanvas: React.FC<CanvasProps> = ({ canvasWidth, canvasHeight }) => {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-    // const balls: BallProperties[] = [
-    //     {
-    //         properties: {
-    //             radius: 30,
-    //             x: 30,
-    //             y: 30,
-    //             color: 'red',
-    //             mass: 2
-    //         },
-    //         velocity: { vx: 5, vy: 5 }
-    //     },
-    //     {
-    //         properties: {
-    //             radius: 30,
-    //             x: canvasWidth - 30,
-    //             y: 30,
-    //             color: 'blue',
-    //             mass: 3
-    //         },
-    //         velocity: { vx: 5, vy: 5 }
-    //     },
-    //     {
-    //         properties: {
-    //             radius: 30,
-    //             x: canvasWidth / 2,
-    //             y: canvasHeight / 2,
-    //             color: 'yellow',
-    //             mass: 3
-    //         },
-    //         velocity: { vx: 5, vy: 5 }
-    //     }
-
-    // ]
-
-    // const balls = generateRandomeBalls(canvasWidth, canvasHeight)
     const balls: BallProperties[] = [];
 
     for (let i = 0; i < 20; i++) {
