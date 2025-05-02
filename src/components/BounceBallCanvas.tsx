@@ -29,12 +29,39 @@ interface BallProperties {
     velocity: Velocity
 }
 
-function randomNumberGenerate(min: number, max: number) {
+function handleMouseHover(
+    e: React.MouseEvent<HTMLCanvasElement, MouseEvent>,
+    cursorPoint: { x: number, y: number }
+) {
+    const canvas = e.currentTarget;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    cursorPoint.x = e.clientX - rect.left;
+    cursorPoint.y = e.clientY - rect.top;
+}
+
+function randomNumberGenerate(min: number, max: number): number {
     const number = Math.random() * (max - min + 1) + min;
     return number;
 }
 
-function collisionVelocity(ball1: BallProperties, ball2: BallProperties) {
+function ballColliding(ball1: Omit<DrawingProperties, 'color' | 'mass'>, ball2: Omit<DrawingProperties, 'color' | 'mass'>): boolean {
+
+    // distance between two balls
+    const ballDistance =
+        Math.sqrt(
+            Math.pow((ball1.x - ball2.x), 2) +
+            Math.pow((ball1.y - ball2.y), 2)
+        )
+
+    // sum of two balls radius
+    const sumOfRadius = ball1.radius + ball2.radius;
+
+    // based on whether balls are collide or not returns true or false
+    return ballDistance <= sumOfRadius;
+}
+
+function collisionVelocity(ball1: BallProperties, ball2: BallProperties): void {
     // ball1 properties and velocity
     const x1 = ball1.properties.x;
     const y1 = ball1.properties.y;
@@ -78,9 +105,10 @@ function collisionVelocity(ball1: BallProperties, ball2: BallProperties) {
     ball2.velocity.vx -= (m2 * collisionImpulse * (-dx));
     ball2.velocity.vy -= (m2 * collisionImpulse * (-dy));
 
+    return;
 }
 
-function drawBall(ctx: CanvasRenderingContext2D, properties: DrawingProperties): void {
+function drawBall(ctx: CanvasRenderingContext2D, properties: DrawingProperties, flag: boolean): void {
     const { x, y, radius, color } = properties
 
     // Save the canvas state
@@ -88,9 +116,18 @@ function drawBall(ctx: CanvasRenderingContext2D, properties: DrawingProperties):
 
     // Draw the ball
     ctx.beginPath();
-    ctx.fillStyle = color;
     ctx.arc(x, y, radius, 0, 2 * Math.PI);
-    ctx.fill()
+
+    if (flag) {
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = color;
+        ctx.fill();
+    } else {
+        ctx.globalAlpha = 0.4;
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = color;
+        ctx.stroke();
+    }
 
     // Restore the canvas state
     ctx.restore()
@@ -100,7 +137,8 @@ function renderBouncingBall(
     ctx: CanvasRenderingContext2D,
     canvasWidth: number,
     canvasHeight: number,
-    ballProperties: BallProperties[]
+    ballProperties: BallProperties[],
+    cursorPoint: { x: number, y: number }
 ): void {
 
     // clear canvas
@@ -108,23 +146,12 @@ function renderBouncingBall(
 
     ballProperties.forEach((ball) => {
         const { properties, velocity } = ball
-        const currentBallPosition = { x: properties.x, y: properties.y }
-        const currentBallRadius = properties.radius
 
-        for (const othrBall of ballProperties) {
-            if (othrBall === ball) continue;
-            const comparingBallPosition = othrBall.properties
-            const comparingBallRadius = othrBall.properties.radius
-
-            const ballDistance =
-                Math.sqrt(
-                    Math.pow((currentBallPosition.x - comparingBallPosition.x), 2) +
-                    Math.pow((currentBallPosition.y - comparingBallPosition.y), 2)
-                )
-            const sumOfRadius = currentBallRadius + comparingBallRadius
-
-            if (ballDistance <= sumOfRadius) {
-                collisionVelocity(ball, othrBall)
+        for (const otherBall of ballProperties) {
+            if (otherBall === ball) continue;
+            const isBallColliding = ballColliding(ball.properties, otherBall.properties);
+            if (isBallColliding) {
+                collisionVelocity(ball, otherBall)
             }
         }
 
@@ -135,29 +162,31 @@ function renderBouncingBall(
             velocity.vy = -velocity.vy;
         }
 
+        const isBallCollideWithHover = ballColliding({
+            ...cursorPoint,
+            radius: 30,
+        }, ball.properties)
+
         // draw ball
-        drawBall(ctx, properties);
+        drawBall(ctx, properties, isBallCollideWithHover);
         properties.x = properties.x + velocity.vx;
         properties.y = properties.y + velocity.vy;
-
     })
 
-    requestAnimationFrame(() => renderBouncingBall(ctx, canvasWidth, canvasHeight, ballProperties))
+    requestAnimationFrame(() => renderBouncingBall(ctx, canvasWidth, canvasHeight, ballProperties, cursorPoint))
 }
 
-const BounceBallCanvas: React.FC<CanvasProps> = ({ canvasWidth, canvasHeight }) => {
-    const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
+function generateInitialBalls(count: number, canvasWidth: number, canvasHeight: number): BallProperties[] {
     const balls: BallProperties[] = [];
 
-    for (let i = 0; i < 20; i++) {
-        const radius = randomNumberGenerate(5, 20)
+    for (let i = 0; i < count; i++) {
+        const radius = randomNumberGenerate(5, 20);
         const x = randomNumberGenerate(radius, canvasWidth - radius);
         const y = randomNumberGenerate(radius, canvasHeight - radius);
         const vx = randomNumberGenerate(3, 4);
         const vy = randomNumberGenerate(3, 4);
 
-        const ball = {
+        balls.push({
             properties: {
                 radius,
                 x,
@@ -166,18 +195,27 @@ const BounceBallCanvas: React.FC<CanvasProps> = ({ canvasWidth, canvasHeight }) 
                 mass: 1
             },
             velocity: { vx, vy }
-        }
-        balls.push(ball)
+        });
     }
+
+    return balls;
+}
+
+const BounceBallCanvas: React.FC<CanvasProps> = ({ canvasWidth, canvasHeight }) => {
+    const cursorPoint = useRef({ x: 0, y: 0 });
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
     useEffect(() => {
         const canvas = canvasRef.current;
-        if (canvas) {
+        if (canvas !== null) {
             canvas.width = canvasWidth;
             canvas.height = canvasHeight;
             const ctx = canvas?.getContext("2d");
             if (!ctx) return
 
-            renderBouncingBall(ctx, canvas?.width, canvas?.height, balls)
+            const balls = generateInitialBalls(20, canvasWidth, canvasHeight);
+
+            renderBouncingBall(ctx, canvas?.width, canvas?.height, balls, cursorPoint.current)
 
         }
     }, [canvasWidth, canvasHeight]);
@@ -186,7 +224,7 @@ const BounceBallCanvas: React.FC<CanvasProps> = ({ canvasWidth, canvasHeight }) 
         <div
             className="w-fit h-auto border"
         >
-            <canvas ref={canvasRef} onMouseUp={() => console.log('hovers')} />
+            <canvas ref={canvasRef} onMouseMove={(e) => handleMouseHover(e, cursorPoint.current)} />
         </div>
     );
 };
