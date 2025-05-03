@@ -1,9 +1,9 @@
 'use client'
-import { useEffect, useRef } from "react";
+import { BallConstraints, Cursor_Hover } from "@/constants/bouncingBall";
+import React, { SetStateAction, useEffect, useRef, useState } from "react";
 
 interface CanvasProps {
-    canvasWidth: number,
-    canvasHeight: number
+ 
 }
 
 interface Point {
@@ -29,15 +29,26 @@ interface BallProperties {
     velocity: Velocity
 }
 
+interface BallConstraints {
+    ball_Counts: number;
+    minBallRadius: number;
+    maxBallRadius: number;
+    minBallVelocity_X: number;
+    maxBallVelocity_X: number;
+    minBallVelocity_Y: number;
+    maxBallVelocity_Y: number;
+    ballMass: number;
+}
 function handleMouseHover(
     e: React.MouseEvent<HTMLCanvasElement, MouseEvent>,
-    cursorPoint: { x: number, y: number }
+    cursorProperty: { x: number, y: number, isHover: boolean, },
 ) {
     const canvas = e.currentTarget;
     if (!canvas) return;
     const rect = canvas.getBoundingClientRect();
-    cursorPoint.x = e.clientX - rect.left;
-    cursorPoint.y = e.clientY - rect.top;
+    cursorProperty.x = e.clientX - rect.left;
+    cursorProperty.y = e.clientY - rect.top;
+    cursorProperty.isHover = true
 }
 
 function randomNumberGenerate(min: number, max: number): number {
@@ -138,7 +149,7 @@ function renderBouncingBall(
     canvasWidth: number,
     canvasHeight: number,
     ballProperties: BallProperties[],
-    cursorPoint: { x: number, y: number }
+    cursorProperty: { x: number, y: number, hoverRadius: number, isHover: boolean },
 ): void {
 
     // clear canvas
@@ -161,30 +172,36 @@ function renderBouncingBall(
         if (properties.y + velocity.vy > canvasHeight - properties.radius || properties.y + velocity.vy < properties.radius) {
             velocity.vy = -velocity.vy;
         }
-
-        const isBallCollideWithHover = ballColliding({
-            ...cursorPoint,
-            radius: 30,
-        }, ball.properties)
-
+        if (cursorProperty.isHover) {
+            const isBallCollideWithHover = ballColliding({
+                ...cursorProperty,
+                radius: cursorProperty.hoverRadius,
+            }, ball.properties)
+            drawBall(ctx, properties, isBallCollideWithHover);
+        }
+        else {
+            drawBall(ctx, properties, false);
+        }
         // draw ball
-        drawBall(ctx, properties, isBallCollideWithHover);
         properties.x = properties.x + velocity.vx;
         properties.y = properties.y + velocity.vy;
     })
+    cursorProperty.isHover = false;
 
-    requestAnimationFrame(() => renderBouncingBall(ctx, canvasWidth, canvasHeight, ballProperties, cursorPoint))
+    requestAnimationFrame(() =>
+        renderBouncingBall(ctx, canvasWidth, canvasHeight, ballProperties, cursorProperty)
+    )
 }
 
-function generateInitialBalls(count: number, canvasWidth: number, canvasHeight: number): BallProperties[] {
+function generateInitialBalls(canvasWidth: number, canvasHeight: number, constraints: BallConstraints): BallProperties[] {
     const balls: BallProperties[] = [];
 
-    for (let i = 0; i < count; i++) {
-        const radius = randomNumberGenerate(5, 20);
+    for (let i = 0; i < constraints.ball_Counts; i++) {
+        const radius = randomNumberGenerate(constraints.minBallRadius, constraints.maxBallRadius);
         const x = randomNumberGenerate(radius, canvasWidth - radius);
         const y = randomNumberGenerate(radius, canvasHeight - radius);
-        const vx = randomNumberGenerate(3, 4);
-        const vy = randomNumberGenerate(3, 4);
+        const vx = randomNumberGenerate(constraints.minBallVelocity_X, constraints.maxBallVelocity_X);
+        const vy = randomNumberGenerate(constraints.minBallVelocity_Y, constraints.maxBallVelocity_Y);
 
         balls.push({
             properties: {
@@ -192,7 +209,7 @@ function generateInitialBalls(count: number, canvasWidth: number, canvasHeight: 
                 x,
                 y,
                 color: `rgb(${randomNumberGenerate(0, 255)}, ${randomNumberGenerate(0, 255)}, ${randomNumberGenerate(0, 255)})`,
-                mass: 1
+                mass: constraints.ballMass
             },
             velocity: { vx, vy }
         });
@@ -201,30 +218,44 @@ function generateInitialBalls(count: number, canvasWidth: number, canvasHeight: 
     return balls;
 }
 
-const BounceBallCanvas: React.FC<CanvasProps> = ({ canvasWidth, canvasHeight }) => {
-    const cursorPoint = useRef({ x: 0, y: 0 });
+const BounceBallCanvas: React.FC<CanvasProps> = () => {
+
+    const cursorProperty = useRef({ x: 0, y: 0, hoverRadius: Cursor_Hover.Cursor_Hover_Radius, isHover: false });
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
     useEffect(() => {
         const canvas = canvasRef.current;
         if (canvas !== null) {
+            console.log(canvas.clientWidth);
+            const canvasWidth = canvas.clientWidth;
+            const canvasHeight = canvas.clientHeight;
             canvas.width = canvasWidth;
             canvas.height = canvasHeight;
             const ctx = canvas?.getContext("2d");
             if (!ctx) return
 
-            const balls = generateInitialBalls(20, canvasWidth, canvasHeight);
+            const ballConstraints: BallConstraints = {
+                ball_Counts: BallConstraints.BallCount,
+                minBallRadius: BallConstraints.MinRadius,
+                maxBallRadius: BallConstraints.MaxRadius,
+                minBallVelocity_X: BallConstraints.MinVelocityX,
+                maxBallVelocity_X: BallConstraints.MaxVelocityX,
+                minBallVelocity_Y: BallConstraints.MinVelocityY,
+                maxBallVelocity_Y: BallConstraints.MaxVelocityY,
+                ballMass: BallConstraints.Mass,
+            };
+            const balls = generateInitialBalls(canvasWidth, canvasHeight, ballConstraints);
 
-            renderBouncingBall(ctx, canvas?.width, canvas?.height, balls, cursorPoint.current)
+            renderBouncingBall(ctx, canvasWidth, canvasHeight, balls, cursorProperty.current)
 
         }
-    }, [canvasWidth, canvasHeight]);
+    }, []);
 
     return (
         <div
-            className="w-fit h-auto border"
+            className="w-[100vw] h-[80vh] border"
         >
-            <canvas ref={canvasRef} onMouseMove={(e) => handleMouseHover(e, cursorPoint.current)} />
+            <canvas className="w-full h-full" ref={canvasRef} onMouseMove={(e) => handleMouseHover(e, cursorProperty.current)} />
         </div>
     );
 };
